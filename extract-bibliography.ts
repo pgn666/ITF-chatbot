@@ -4,8 +4,8 @@ import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 
 const PDF_DIR = path.resolve("./PDFs");
 const LLM_BASE_URL = process.env.LLM_URL || "http://localhost:1234/v1";
-const LAST_PAGES = 20;
-const MAX_TEXT_CHARS = 15_000;
+const LAST_PAGES = 10;
+const MAX_TEXT_CHARS = 10_000;
 
 interface BibliographyEntry {
   author: string | null;
@@ -24,11 +24,17 @@ interface BibliographyResult {
 
 // ── PDF text extraction (last N pages — bibliography sits at the end) ──
 
-async function extractTailTextFromPdf(pdfPath: string): Promise<string> {
+async function extractTailTextFromPdf(
+  pdfPath: string,
+  lastPages: number = LAST_PAGES,
+): Promise<string> {
   const buf = fs.readFileSync(pdfPath);
-  const doc = await getDocument({ data: new Uint8Array(buf), useSystemFonts: true }).promise;
+  const doc = await getDocument({
+    data: new Uint8Array(buf),
+    useSystemFonts: true,
+  }).promise;
 
-  const startPage = Math.max(1, doc.numPages - LAST_PAGES + 1);
+  const startPage = Math.max(1, doc.numPages - lastPages + 1);
   const chunks: string[] = [];
   let totalLen = 0;
 
@@ -54,18 +60,22 @@ async function checkLLMConnection(): Promise<boolean> {
     const res = await fetch(`${LLM_BASE_URL}/models`);
     if (!res.ok) return false;
     const data = (await res.json()) as { data?: unknown[] };
-    console.log(`Connected to LM Studio. Available models: ${data.data?.length ?? 0}`);
+    console.log(
+      `Connected to LM Studio. Available models: ${data.data?.length ?? 0}`,
+    );
     return true;
   } catch {
     return false;
   }
 }
 
-async function queryLLMForBibliography(pdfText: string): Promise<BibliographyEntry[]> {
+async function queryLLMForBibliography(
+  pdfText: string,
+): Promise<BibliographyEntry[]> {
   const systemPrompt = `You are a bibliography extraction assistant. You will receive text from the end pages of a Czech/Slovak/Polish university thesis PDF.
 
 Your task:
-1. Locate the bibliography/references section. It may be titled "BIBLIOGRAFIE", "Použitá literatura", "Seznam literatury", "Seznam použité literatury", "Literatura", "Zdroje", "Použité zdroje", "Prameny a literatura", "References", "Bibliography", or similar.
+1. Locate the bibliography/references section. It may be titled "BIBLIOGRAFIE", "Použitá literatura", "Seznam literatury", "SEZNAM LITERATURY", "Seznam použité literatury", "Literatura", "Zdroje", "Použité zdroje", "POUŽITÉ ZDROJE", "Prameny a literatura", "References", "Bibliography", or similar.
 2. Extract EVERY bibliographic entry from that section into a structured JSON array.
 3. For each entry, extract these fields (set to null if not determinable):
    - "author": Author name(s), e.g. "Barthes, R." or "Birgus, V., Vojtěchovský, M."
@@ -108,7 +118,10 @@ Important rules:
   const raw = data.choices[0]?.message?.content?.trim();
   if (!raw) throw new Error("Empty LLM response");
 
-  const jsonStr = raw.replace(/^```json?\s*/i, "").replace(/```\s*$/i, "").trim();
+  const jsonStr = raw
+    .replace(/^```json?\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .trim();
 
   try {
     const parsed = JSON.parse(jsonStr);
@@ -159,7 +172,7 @@ async function main(): Promise<void> {
     console.error(
       `Cannot connect to LM Studio at ${LLM_BASE_URL}.\n` +
         "Make sure LM Studio is running with a model loaded.\n" +
-        "You can override the URL with: LLM_URL=http://host:port/v1 pnpm extract-bibliography"
+        "You can override the URL with: LLM_URL=http://host:port/v1 pnpm extract-bibliography",
     );
     process.exit(1);
   }
@@ -172,8 +185,12 @@ async function main(): Promise<void> {
       console.log("No previous errors found. Nothing to reprocess.");
       return;
     }
-    subdirs = prev.errors.map((e) => e.id).sort((a, b) => Number(a) - Number(b));
-    console.log(`--errors-only: reprocessing ${subdirs.length} previously errored folders.\n`);
+    subdirs = prev.errors
+      .map((e) => e.id)
+      .sort((a, b) => Number(a) - Number(b));
+    console.log(
+      `--errors-only: reprocessing ${subdirs.length} previously errored folders.\n`,
+    );
   } else {
     subdirs = fs
       .readdirSync(PDF_DIR)
@@ -206,7 +223,9 @@ async function main(): Promise<void> {
     const dirPath = path.join(PDF_DIR, dir);
     const bibPath = path.join(dirPath, "AI-bibliography.json");
 
-    const pdfFiles = fs.readdirSync(dirPath).filter((f) => f.toLowerCase().endsWith(".pdf"));
+    const pdfFiles = fs
+      .readdirSync(dirPath)
+      .filter((f) => f.toLowerCase().endsWith(".pdf"));
     if (pdfFiles.length === 0) {
       console.log(`[${dir}] No PDF file, skipping.`);
       if (!results.skipped.includes(dir)) results.skipped.push(dir);
@@ -215,7 +234,9 @@ async function main(): Promise<void> {
     }
 
     if (fs.existsSync(bibPath) && !force) {
-      console.log(`[${dir}] AI-bibliography.json already exists, skipping. (use --force to re-extract)`);
+      console.log(
+        `[${dir}] AI-bibliography.json already exists, skipping. (use --force to re-extract)`,
+      );
       if (!results.skipped.includes(dir)) results.skipped.push(dir);
       saveResults(results);
       continue;
@@ -225,17 +246,40 @@ async function main(): Promise<void> {
 
     try {
       console.log(`[${dir}] Extracting tail text from PDF…`);
-      const pdfText = await extractTailTextFromPdf(pdfPath);
+      let pdfText = await extractTailTextFromPdf(pdfPath);
 
       if (pdfText.trim().length < 50) {
-        console.log(`[${dir}] Too little extractable text (${pdfText.trim().length} chars), skipping.`);
+        console.log(
+          `[${dir}] Too little extractable text (${pdfText.trim().length} chars), skipping.`,
+        );
         if (!results.skipped.includes(dir)) results.skipped.push(dir);
         saveResults(results);
         continue;
       }
 
-      console.log(`[${dir}] Querying LLM for bibliography (${pdfText.length} chars)…`);
-      const entries = await queryLLMForBibliography(pdfText);
+      console.log(
+        `[${dir}] Querying LLM for bibliography (${pdfText.length} chars)…`,
+      );
+      let entries: BibliographyEntry[];
+      try {
+        entries = await queryLLMForBibliography(pdfText);
+      } catch (firstErr) {
+        const errMsg = (firstErr as Error).message;
+        if (
+          errMsg.includes("tokens to keep") ||
+          errMsg.includes("context length")
+        ) {
+          const RETRY_PAGES = 5;
+          console.log(
+            `[${dir}] Context too long, retrying with last ${RETRY_PAGES} pages…`,
+          );
+          pdfText = await extractTailTextFromPdf(pdfPath, RETRY_PAGES);
+          console.log(`[${dir}] Retrying LLM query (${pdfText.length} chars)…`);
+          entries = await queryLLMForBibliography(pdfText);
+        } else {
+          throw firstErr;
+        }
+      }
 
       const output: BibliographyResult = {
         _source: "LLM bibliography extraction",
@@ -249,10 +293,14 @@ async function main(): Promise<void> {
 
       if (entries.length > 0) {
         results.withEntries.push(dir);
-        console.log(`[${dir}] Extracted ${entries.length} bibliography entries → wrote AI-bibliography.json`);
+        console.log(
+          `[${dir}] Extracted ${entries.length} bibliography entries → wrote AI-bibliography.json`,
+        );
       } else {
         results.empty.push(dir);
-        console.log(`[${dir}] No bibliography found → wrote AI-bibliography.json (empty)`);
+        console.log(
+          `[${dir}] No bibliography found → wrote AI-bibliography.json (empty)`,
+        );
       }
     } catch (err) {
       const msg = (err as Error).message;
@@ -266,7 +314,7 @@ async function main(): Promise<void> {
   console.log(
     `\nDone! Processed: ${results.processed.length}, skipped: ${results.skipped.length}, ` +
       `with entries: ${results.withEntries.length}, empty: ${results.empty.length}, ` +
-      `errors: ${results.errors.length}`
+      `errors: ${results.errors.length}`,
   );
   console.log(`Results saved to ${RESULTS_PATH}`);
 }
