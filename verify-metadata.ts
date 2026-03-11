@@ -267,14 +267,13 @@ async function main(): Promise<void> {
     errors: [],
   };
 
-  // When running --errors-only, merge with previous results so we don't lose data
-  const prevResults = errorsOnly ? loadPreviousResults() : null;
+  const prevResults = (errorsOnly || singleId) ? loadPreviousResults() : null;
   if (prevResults) {
     results.processed = [...prevResults.processed];
     results.withDiffs = [...prevResults.withDiffs];
     results.matching = [...prevResults.matching];
     results.skipped = [...prevResults.skipped];
-    // errors will be rebuilt from scratch for the retried folders
+    results.errors = prevResults.errors.filter((e) => e.id !== singleId);
   }
 
   for (const dir of subdirs) {

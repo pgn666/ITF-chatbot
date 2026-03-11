@@ -232,12 +232,13 @@ async function main(): Promise<void> {
     errors: [],
   };
 
-  const prevResults = errorsOnly ? loadPreviousResults() : null;
+  const prevResults = (errorsOnly || singleId) ? loadPreviousResults() : null;
   if (prevResults) {
     results.processed = [...prevResults.processed];
     results.withEntries = [...prevResults.withEntries];
     results.empty = [...prevResults.empty];
     results.skipped = [...prevResults.skipped];
+    results.errors = prevResults.errors.filter((e) => e.id !== singleId);
   }
 
   for (const dir of subdirs) {
