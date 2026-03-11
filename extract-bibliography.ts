@@ -164,9 +164,21 @@ function saveResults(results: ExtractResults): void {
 
 // ── Main ──
 
+function parseIdArg(): string | null {
+  const idx = process.argv.indexOf("--id");
+  if (idx === -1) return null;
+  const val = process.argv[idx + 1];
+  if (!val || !/^\d+$/.test(val)) {
+    console.error("--id requires a numeric folder name, e.g. --id 3161");
+    process.exit(1);
+  }
+  return val;
+}
+
 async function main(): Promise<void> {
   const errorsOnly = process.argv.includes("--errors-only");
   const force = process.argv.includes("--force");
+  const singleId = parseIdArg();
 
   const connected = await checkLLMConnection();
   if (!connected) {
@@ -180,7 +192,15 @@ async function main(): Promise<void> {
 
   let subdirs: string[];
 
-  if (errorsOnly) {
+  if (singleId) {
+    const dirPath = path.join(PDF_DIR, singleId);
+    if (!fs.existsSync(dirPath) || !fs.statSync(dirPath).isDirectory()) {
+      console.error(`Folder ${dirPath} does not exist.`);
+      process.exit(1);
+    }
+    subdirs = [singleId];
+    console.log(`Processing single folder: ${singleId}\n`);
+  } else if (errorsOnly) {
     const prev = loadPreviousResults();
     if (!prev || prev.errors.length === 0) {
       console.log("No previous errors found. Nothing to reprocess.");
