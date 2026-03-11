@@ -25,7 +25,7 @@ async function extractTextFromPdf(pdfPath: string): Promise<string[]> {
 
 // JS \b doesn't handle Unicode word boundaries, so we use a lookahead instead
 const STOP_HEADERS =
-  /(?:^|\s)(ABSTRAKT|KLÍČOVÁ SLOVA|KEYWORDS|PROHLÁŠENÍ|PROHLASENI|SOUHLAS|PODĚKOVÁNÍ|PODEKOVANI|OBSAH|ÚVOD|UVOD|DECLARATION|TABLE OF CONTENTS|CONTENTS)(?:\s|:|$)/i;
+  /(?:^|\s)(ABSTRAKT|KLÍČOVÁ SLOVA|KEY\s*WORDS|PROHLÁŠENÍ|PROHLASENI|SOUHLAS|PODĚKOVÁNÍ|PODEKOVANI|OBSAH|ÚVOD|UVOD|DECLARATION|TABLE OF CONTENTS|CONTENTS)(?:\s|:|$)/i;
 
 function extractAbstractAndKeywords(pages: string[]): {
   abstract: string | null;
@@ -36,7 +36,7 @@ function extractAbstractAndKeywords(pages: string[]): {
 
   // Match only the English headers — ABSTRACT (not ABSTRAKT) and KEYWORDS (not KLÍČOVÁ SLOVA)
   const abstractMatch = fullText.match(/(?:^|\s)ABSTRACT\s*:?\s*/i);
-  const keywordsMatch = fullText.match(/(?:^|\s)KEYWORDS\s*:?\s*/i);
+  const keywordsMatch = fullText.match(/(?:^|\s)KEY\s*WORDS\s*:?\s*/i);
 
   let abstract: string | null = null;
   let keywords: string[] | null = null;
@@ -114,7 +114,7 @@ async function main(): Promise<void> {
 
     const meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
 
-    if (meta.abstract !== undefined && meta.keywords !== undefined) {
+    if (meta.abstract !== undefined && meta.abstract !== null && meta.keywords !== undefined && meta.keywords !== null) {
       console.log(`[${dir}] Already processed, skipping.`);
       skipped++;
       continue;
