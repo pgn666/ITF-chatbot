@@ -5,7 +5,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "download-theses": "tsx downloadTheses.ts",
-    "organize-theses": "tsx organizeTheses.ts"
+    "organize-theses": "tsx organizeTheses.ts",
+    "extract-abstracts": "tsx extractAbstracts.ts"
   },
   "keywords": [],
   "author": "",
@@ -13,7 +14,8 @@
   "description": "",
   "dependencies": {
     "cheerio": "^1.2.0",
-    "node-fetch": "^3.3.2"
+    "node-fetch": "^3.3.2",
+    "pdfjs-dist": "^5.5.207"
   },
   "devDependencies": {
     "@types/cheerio": "^0.22.35",
