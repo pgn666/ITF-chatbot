@@ -25,6 +25,35 @@ interface BibliographyResult {
 
 // ── PDF text extraction (last N pages — bibliography sits at the end) ──
 
+interface TextItem {
+  str?: string;
+  transform?: number[];
+}
+
+function extractPageLines(items: TextItem[]): string {
+  const filtered = items.filter((i) => i.str && i.str.trim() && i.transform);
+  if (filtered.length === 0) return "";
+
+  const lines: string[][] = [];
+  let currentLine: string[] = [];
+  let lastY: number | null = null;
+
+  for (const item of filtered) {
+    const y = item.transform![5];
+    if (lastY !== null && Math.abs(y - lastY) > 2) {
+      if (currentLine.length > 0) {
+        lines.push(currentLine);
+        currentLine = [];
+      }
+    }
+    currentLine.push(item.str!);
+    lastY = y;
+  }
+  if (currentLine.length > 0) lines.push(currentLine);
+
+  return lines.map((words) => words.join(" ")).join("\n");
+}
+
 async function extractTailTextFromPdf(
   pdfPath: string,
   lastPages: number = LAST_PAGES,
@@ -43,10 +72,7 @@ async function extractTailTextFromPdf(
   for (let p = startPage; p <= doc.numPages; p++) {
     const page = await doc.getPage(p);
     const content = await page.getTextContent();
-    const text = (content.items as Array<{ str?: string }>)
-      .filter((i) => i.str && i.str.trim())
-      .map((i) => i.str)
-      .join(" ");
+    const text = extractPageLines(content.items as TextItem[]);
     chunks.push(text);
     totalLen += text.length;
     if (totalLen >= MAX_TEXT_CHARS) break;
@@ -77,7 +103,7 @@ async function queryLLMForBibliography(
   const systemPrompt = `You are a bibliography extraction assistant. You will receive text from the end pages of a Czech/Slovak/Polish university thesis PDF.
 
 Your task:
-1. Locate the bibliography/references section. It may be titled "BIBLIOGRAFIE", "Použitá literatura", "Seznam literatury", "SEZNAM LITERATURY", "Seznam použité literatury", "Literatura", "Zdroje", "Použité zdroje", "POUŽITÉ ZDROJE", "Prameny a literatura", "References", "Bibliography", or similar.
+1. Locate the bibliography/references section. It may be titled "BIBLIOGRAFIE", "Použitá literatura", "Seznam literatury", "SEZNAM LITERATURY", "Seznam použité literatury", "SEZNAM POUŽITÉ LITERATURY", "Literatura", "Zdroje", "Použité zdroje", "POUŽITÉ ZDROJE", "Prameny a literatura", "References", "Bibliography", or similar. NOTE: titles may have unusual capitalization (e.g. "seZnaM použité literatury") or be split across multiple lines — match them case-insensitively.
 2. Extract EVERY bibliographic entry from that section into a structured JSON array.
 3. For each entry, extract these fields (set to null if not determinable):
    - "author": Author name(s), e.g. "Barthes, R." or "Birgus, V., Vojtěchovský, M."
