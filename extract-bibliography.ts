@@ -32,6 +32,7 @@ async function extractTailTextFromPdf(
   const doc = await getDocument({
     data: new Uint8Array(buf),
     useSystemFonts: true,
+    verbosity: 0,
   }).promise;
 
   const startPage = Math.max(1, doc.numPages - lastPages + 1);
