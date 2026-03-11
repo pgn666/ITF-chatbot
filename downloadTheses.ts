@@ -7,6 +7,7 @@ import { pipeline } from "stream/promises";
 const BASE_URL = "https://itf-new.slu.cz";
 const MAIN_URL = `${BASE_URL}/sprava-studentu/zaverecneprace/`;
 const PDF_DIR = path.resolve("./PDFs");
+const PROGRESS_FILE = path.join(PDF_DIR, ".processed.json");
 
 // Number of concurrent downloads
 const CONCURRENCY = 3;
@@ -15,6 +16,19 @@ const REQUEST_DELAY_MS = 300;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function loadProgress(): Set<string> {
+  try {
+    const raw = fs.readFileSync(PROGRESS_FILE, "utf8");
+    return new Set(JSON.parse(raw) as string[]);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveProgress(processed: Set<string>): void {
+  fs.writeFileSync(PROGRESS_FILE, JSON.stringify([...processed], null, 2));
 }
 
 function sanitizeFilename(name: string): string {
@@ -64,11 +78,16 @@ async function getPDFLinkFromWorkDetail(workDetailUrl: string): Promise<string |
   return pdfHref;
 }
 
-async function downloadPDF(pdfUrl: string, index: number, total: number): Promise<void> {
-  const res = await fetch(pdfUrl);
-  if (!res.ok) throw new Error(`HTTP ${res.status} downloading ${pdfUrl}`);
+async function downloadPDF(
+  pdfUrl: string,
+  index: number,
+  total: number
+): Promise<void> {
+  // Use a HEAD request first to get the filename without downloading the body
+  const head = await fetch(pdfUrl, { method: "HEAD" });
+  if (!head.ok) throw new Error(`HTTP ${head.status} (HEAD) for ${pdfUrl}`);
 
-  const disposition = res.headers.get("content-disposition");
+  const disposition = head.headers.get("content-disposition");
   const fallback = sanitizeFilename(path.basename(pdfUrl)) + ".pdf";
   const rawName = filenameFromDisposition(disposition, fallback);
   const filename = sanitizeFilename(rawName);
@@ -79,7 +98,10 @@ async function downloadPDF(pdfUrl: string, index: number, total: number): Promis
     return;
   }
 
+  const res = await fetch(pdfUrl);
+  if (!res.ok) throw new Error(`HTTP ${res.status} downloading ${pdfUrl}`);
   if (!res.body) throw new Error(`No response body for ${pdfUrl}`);
+
   await pipeline(res.body, fs.createWriteStream(filepath));
   console.log(`[${index}/${total}] Downloaded: ${filename}`);
 }
@@ -87,19 +109,29 @@ async function downloadPDF(pdfUrl: string, index: number, total: number): Promis
 async function processWorkDetail(
   workDetailPath: string,
   index: number,
-  total: number
+  total: number,
+  processed: Set<string>
 ): Promise<void> {
+  if (processed.has(workDetailPath)) {
+    console.log(`[${index}/${total}] Skipping (already processed): ${workDetailPath}`);
+    return;
+  }
+
   const url = `${BASE_URL}/${workDetailPath.replace(/^\//, "")}`;
   try {
     const pdfUrl = await getPDFLinkFromWorkDetail(url);
     if (!pdfUrl) {
       console.warn(`[${index}/${total}] No PDF found at: ${url}`);
-      return;
+    } else {
+      await sleep(REQUEST_DELAY_MS);
+      await downloadPDF(pdfUrl, index, total);
     }
-    await sleep(REQUEST_DELAY_MS);
-    await downloadPDF(pdfUrl, index, total);
+    // Mark as processed regardless of whether a PDF was found
+    processed.add(workDetailPath);
+    saveProgress(processed);
   } catch (err) {
     console.error(`[${index}/${total}] Error processing ${url}: ${(err as Error).message}`);
+    // Don't mark as processed on error so it retries next run
   }
 }
 
@@ -107,7 +139,6 @@ async function runWithConcurrency<T>(
   tasks: (() => Promise<T>)[],
   concurrency: number
 ): Promise<void> {
-  const results: Promise<T>[] = [];
   let i = 0;
 
   async function run(): Promise<void> {
@@ -124,6 +155,11 @@ async function runWithConcurrency<T>(
 
 async function main(): Promise<void> {
   fs.mkdirSync(PDF_DIR, { recursive: true });
+
+  const processed = loadProgress();
+  if (processed.size > 0) {
+    console.log(`Resuming — ${processed.size} entries already processed.\n`);
+  }
 
   console.log("Fetching main page...");
   const html = await fetchPage(MAIN_URL);
@@ -150,11 +186,13 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const total = workDetailPaths.length;
-  console.log(`Found ${total} bachelor thesis entries. Starting downloads...\n`);
+  const remaining = workDetailPaths.filter((p) => !processed.has(p));
+  console.log(
+    `Found ${workDetailPaths.length} bachelor thesis entries, ${remaining.length} remaining. Starting downloads...\n`
+  );
 
   const tasks = workDetailPaths.map(
-    (workPath, idx) => () => processWorkDetail(workPath, idx + 1, total)
+    (workPath, idx) => () => processWorkDetail(workPath, idx + 1, workDetailPaths.length, processed)
   );
 
   await runWithConcurrency(tasks, CONCURRENCY);
