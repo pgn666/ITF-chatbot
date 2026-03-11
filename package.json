@@ -4,7 +4,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "download-theses": "tsx downloadTheses.ts"
+    "download-theses": "tsx downloadTheses.ts",
+    "organize-theses": "tsx organizeTheses.ts"
   },
   "keywords": [],
   "author": "",
