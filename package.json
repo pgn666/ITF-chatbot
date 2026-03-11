@@ -10,7 +10,10 @@
     "extract-english-titles": "tsx extractEnglishTitles.ts",
     "verify-metadata": "tsx verify-metadata.ts",
     "verify-metadata:errors-only": "tsx verify-metadata.ts --errors-only",
-    "verify-metadata:force": "tsx verify-metadata.ts --force"
+    "verify-metadata:force": "tsx verify-metadata.ts --force",
+    "extract-bibliography": "tsx extract-bibliography.ts",
+    "extract-bibliography:errors-only": "tsx extract-bibliography.ts --errors-only",
+    "extract-bibliography:force": "tsx extract-bibliography.ts --force"
   },
   "keywords": [],
   "author": "",
