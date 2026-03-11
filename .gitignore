@@ -1,5 +1,10 @@
 # Dependencies
 node_modules/
+.pnpm-store/
+
+# Lockfiles (keep pnpm-lock.yaml, ignore others)
+package-lock.json
+yarn.lock
 
 # Downloads
 PDFs/
