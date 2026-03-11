@@ -7,7 +7,8 @@
     "download-theses": "tsx downloadTheses.ts",
     "organize-theses": "tsx organizeTheses.ts",
     "extract-abstracts": "tsx extractAbstracts.ts",
-    "extract-english-titles": "tsx extractEnglishTitles.ts"
+    "extract-english-titles": "tsx extractEnglishTitles.ts",
+    "verify-metadata": "tsx verify-metadata.ts"
   },
   "keywords": [],
   "author": "",
