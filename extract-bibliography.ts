@@ -4,8 +4,8 @@ import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 
 const PDF_DIR = path.resolve("./PDFs");
 const LLM_BASE_URL = process.env.LLM_URL || "http://localhost:1234/v1";
-const LAST_PAGES = 10;
-const MAX_TEXT_CHARS = 10_000;
+const LAST_PAGES = 15;
+const MAX_TEXT_CHARS = 15_000;
 
 interface BibliographyEntry {
   author: string | null;
@@ -67,18 +67,17 @@ async function extractTailTextFromPdf(
 
   const startPage = Math.max(1, doc.numPages - lastPages + 1);
   const chunks: string[] = [];
-  let totalLen = 0;
 
   for (let p = startPage; p <= doc.numPages; p++) {
     const page = await doc.getPage(p);
     const content = await page.getTextContent();
     const text = extractPageLines(content.items as TextItem[]);
     chunks.push(text);
-    totalLen += text.length;
-    if (totalLen >= MAX_TEXT_CHARS) break;
   }
 
-  return chunks.join("\n\n").substring(0, MAX_TEXT_CHARS);
+  const full = chunks.join("\n\n");
+  if (full.length <= MAX_TEXT_CHARS) return full;
+  return full.substring(full.length - MAX_TEXT_CHARS);
 }
 
 // ── LM Studio API ──
@@ -103,7 +102,7 @@ async function queryLLMForBibliography(
   const systemPrompt = `You are a bibliography extraction assistant. You will receive text from the end pages of a Czech/Slovak/Polish university thesis PDF.
 
 Your task:
-1. Locate the bibliography/references section. It may be titled "BIBLIOGRAFIE", "Použitá literatura", "Seznam literatury", "SEZNAM LITERATURY", "Seznam použité literatury", "SEZNAM POUŽITÉ LITERATURY", "Literatura", "Zdroje", "Použité zdroje", "POUŽITÉ ZDROJE", "Prameny a literatura", "References", "Bibliography", or similar. NOTE: titles may have unusual capitalization (e.g. "seZnaM použité literatury") or be split across multiple lines — match them case-insensitively.
+1. Locate the bibliography/references section. It may be titled "BIBLIOGRAFIE", "Použitá literatura", "Seznam literatury", "SEZNAM LITERATURY", "Seznam použité literatury", "SEZNAM POUŽITÉ LITERATURY", "Literatura", "Zdroje", "Použité zdroje", "POUŽITÉ ZDROJE", "Prameny a literatura", "Prameny", "References", "Bibliography", or similar. Section titles may be preceded by a chapter number (e.g. "9 Literatura"). NOTE: titles may have unusual capitalization (e.g. "seZnaM použité literatury") or be split across multiple lines — match them case-insensitively.
 2. Extract EVERY bibliographic entry from that section into a structured JSON array.
 3. For each entry, extract these fields (set to null if not determinable):
    - "author": Author name(s), e.g. "Barthes, R." or "Birgus, V., Vojtěchovský, M."
