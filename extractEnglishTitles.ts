@@ -44,6 +44,10 @@ function looksLikeCzechText(text: string): boolean {
   return letters.length > 0 && matches.length / letters.length > 0.04;
 }
 
+function startsWithCzechWord(text: string): boolean {
+  return /^(?:Tato|Tuto|Tento|Tyto|Tito|Smyslem|Cílem|Úvod)\s/i.test(text);
+}
+
 function extractEnglishTitle(
   pages: string[],
   czechTitle: string,
@@ -70,46 +74,50 @@ function extractEnglishTitle(
     if (cleaned) return cleaned;
   }
 
-  // Strategy 2: English title sits between Czech title and author name on a title page
-  const authorParts = (authorName || "").trim().split(/\s+/).filter(Boolean);
-  if (authorParts.length < 2) return null;
-
+  // Strategy 2: English title directly follows Czech title on a title page
   const titleRe = new RegExp(
     escapeRegex(czechTitle.trim()).replace(/\s+/g, "\\s+"),
     "i"
   );
-  const authorRe = new RegExp(
-    authorParts.map((p) => escapeRegex(p)).join("\\s+"),
-    "i"
-  );
 
-  const thesisMetaRe =
-    /(?:^|\s)(?:Teoretická|Bakalářská|Diplomová|Magisterská|Dizertační|Opava\s+\d|Praha\s+\d|Brno\s+\d)/i;
+  const authorParts = (authorName || "").trim().split(/\s+/).filter(Boolean);
+  const authorRe =
+    authorParts.length >= 2
+      ? new RegExp(authorParts.map((p) => escapeRegex(p)).join("\\s+"), "i")
+      : null;
 
-  for (let i = 0; i < Math.min(pages.length, 6); i++) {
+  const stopPatterns: RegExp[] = [
+    /(?:^|\s)(?:Teoretická|Bakalářská|Diplomová|Magisterská|Dizertační|Opava\s+\d|Praha\s+\d|Brno\s+\d)/i,
+    /(?:^|\s)(?:vedoucí|Obor:|TÉMA|NÁZEV)/i,
+    /(?:^|\s)(?:Ing\.|Mgr\.|MgA\.|doc\.|Prof\.|PhDr\.|RNDr\.)/i,
+    /\b(?:19|20)\d{2}\b/,
+  ];
+
+  for (let i = 0; i < Math.min(pages.length, 5); i++) {
     const titleMatch = titleRe.exec(pages[i]);
     if (!titleMatch) continue;
 
     const afterTitle = pages[i].substring(
       titleMatch.index + titleMatch[0].length
     );
-    const authorMatch = authorRe.exec(afterTitle);
-    if (!authorMatch || authorMatch.index! > 300) continue;
 
-    const rawBetween = afterTitle.substring(0, authorMatch.index!);
-    const metaStop = rawBetween.search(thesisMetaRe);
-    const trimmed =
-      metaStop > 0
-        ? rawBetween.substring(0, metaStop)
-        : metaStop === -1
-          ? rawBetween
-          : "";
-    const candidate = cleanText(trimmed);
+    let end = Math.min(afterTitle.length, 300);
+    if (authorRe) {
+      const am = authorRe.exec(afterTitle);
+      if (am && am.index! < end) end = am.index!;
+    }
+    for (const pat of stopPatterns) {
+      const m = afterTitle.match(pat);
+      if (m && m.index! < end) end = m.index!;
+    }
+
+    const candidate = cleanText(afterTitle.substring(0, end));
     if (
       candidate &&
       candidate.split(/\s+/).length >= 3 &&
       candidate.toLowerCase() !== czechTitle.trim().toLowerCase() &&
-      !looksLikeCzechText(candidate)
+      !looksLikeCzechText(candidate) &&
+      !startsWithCzechWord(candidate)
     ) {
       return candidate;
     }
@@ -119,15 +127,27 @@ function extractEnglishTitle(
 }
 
 async function main(): Promise<void> {
-  const subdirs = fs
-    .readdirSync(PDF_DIR)
-    .filter((name) => {
-      const full = path.join(PDF_DIR, name);
-      return fs.statSync(full).isDirectory() && /^\d+$/.test(name);
-    })
-    .sort((a, b) => Number(a) - Number(b));
+  const targetId = process.argv[2];
 
-  console.log(`Found ${subdirs.length} thesis folders.\n`);
+  let subdirs: string[];
+  if (targetId) {
+    const dirPath = path.join(PDF_DIR, targetId);
+    if (!fs.existsSync(dirPath) || !fs.statSync(dirPath).isDirectory()) {
+      console.error(`Folder PDFs/${targetId} does not exist.`);
+      process.exit(1);
+    }
+    subdirs = [targetId];
+    console.log(`Processing single folder: ${targetId}\n`);
+  } else {
+    subdirs = fs
+      .readdirSync(PDF_DIR)
+      .filter((name) => {
+        const full = path.join(PDF_DIR, name);
+        return fs.statSync(full).isDirectory() && /^\d+$/.test(name);
+      })
+      .sort((a, b) => Number(a) - Number(b));
+    console.log(`Found ${subdirs.length} thesis folders.\n`);
+  }
 
   let processed = 0;
   let found = 0;
@@ -152,7 +172,7 @@ async function main(): Promise<void> {
 
     const meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
 
-    if (meta.englishTitle !== undefined) {
+    if (meta.englishTitle !== undefined && meta.englishTitle !== null) {
       console.log(`[${dir}] Already has englishTitle, skipping.`);
       skipped++;
       continue;

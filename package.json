@@ -6,7 +6,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "download-theses": "tsx downloadTheses.ts",
     "organize-theses": "tsx organizeTheses.ts",
-    "extract-abstracts": "tsx extractAbstracts.ts"
+    "extract-abstracts": "tsx extractAbstracts.ts",
+    "extract-english-titles": "tsx extractEnglishTitles.ts"
   },
   "keywords": [],
   "author": "",
