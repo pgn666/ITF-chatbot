@@ -13,6 +13,7 @@ interface BibliographyEntry {
   publisher: string | null;
   city: string | null;
   year: string | null;
+  isbn: string | null;
 }
 
 interface BibliographyResult {
@@ -84,6 +85,7 @@ Your task:
    - "publisher": The publisher name
    - "city": The city of publication
    - "year": The year of publication as a string
+   - "isbn": The ISBN number if present (e.g. "978-80-7363-359-2"), without the "ISBN" prefix
 
 Important rules:
 - Only extract entries from the bibliography/references section, NOT from footnotes, index of names, appendices, or body text.
