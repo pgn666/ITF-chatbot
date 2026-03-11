@@ -80,6 +80,42 @@ async function extractTailTextFromPdf(
   return full.substring(full.length - MAX_TEXT_CHARS);
 }
 
+// ── Local bibliography section detection ──
+
+const BIB_SECTION_PATTERN = new RegExp(
+  "^\\s*(?:\\d+\\.?\\s+)?" +
+    "(?:bibliografie|použitá\\s+literatura|seznam\\s+(?:použité\\s+)?literatury|" +
+    "literatura|zdroje|použité\\s+zdroje|prameny\\s+a\\s+literatura|prameny|" +
+    "references|bibliography)" +
+    "\\s*$",
+  "im",
+);
+
+const END_SECTION_PATTERN = new RegExp(
+  "^\\s*(?:\\d+\\.?\\s+)?" +
+    "(?:jmenný\\s+rejstřík|rejstřík|přílohy|příloha|seznam\\s+(?:obrázků|příloh|zkratek|tabulek)|" +
+    "životopis|curriculum\\s+vitae|poděkování|abstract|anotace)" +
+    "\\s*$",
+  "im",
+);
+
+function extractBibliographySection(text: string): string | null {
+  const match = BIB_SECTION_PATTERN.exec(text);
+  if (!match) return null;
+
+  const bibStart = match.index;
+  const afterBib = text.substring(bibStart);
+
+  const endMatch = END_SECTION_PATTERN.exec(
+    afterBib.substring(match[0].length),
+  );
+  if (endMatch) {
+    return afterBib.substring(0, match[0].length + endMatch.index).trim();
+  }
+
+  return afterBib.trim();
+}
+
 // ── LM Studio API ──
 
 async function checkLLMConnection(): Promise<boolean> {
@@ -306,12 +342,21 @@ async function main(): Promise<void> {
         continue;
       }
 
-      console.log(
-        `[${dir}] Querying LLM for bibliography (${pdfText.length} chars)…`,
-      );
+      const bibSection = extractBibliographySection(pdfText);
+      const textForLLM = bibSection ?? pdfText;
+      if (bibSection) {
+        console.log(
+          `[${dir}] Found bibliography section locally (${bibSection.length} chars), querying LLM…`,
+        );
+      } else {
+        console.log(
+          `[${dir}] No section header found locally, sending full text to LLM (${pdfText.length} chars)…`,
+        );
+      }
+
       let entries: BibliographyEntry[];
       try {
-        entries = await queryLLMForBibliography(pdfText);
+        entries = await queryLLMForBibliography(textForLLM);
       } catch (firstErr) {
         const errMsg = (firstErr as Error).message;
         if (
@@ -323,8 +368,10 @@ async function main(): Promise<void> {
             `[${dir}] Context too long, retrying with last ${RETRY_PAGES} pages…`,
           );
           pdfText = await extractTailTextFromPdf(pdfPath, RETRY_PAGES);
-          console.log(`[${dir}] Retrying LLM query (${pdfText.length} chars)…`);
-          entries = await queryLLMForBibliography(pdfText);
+          const retrySection = extractBibliographySection(pdfText);
+          const retryText = retrySection ?? pdfText;
+          console.log(`[${dir}] Retrying LLM query (${retryText.length} chars)…`);
+          entries = await queryLLMForBibliography(retryText);
         } else {
           throw firstErr;
         }
