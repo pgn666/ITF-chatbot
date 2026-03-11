@@ -174,9 +174,33 @@ function findDifferences(existing: ThesisMetadata, llm: LLMExtracted): Differenc
   return diffs;
 }
 
+// ── Results tracking ──
+
+const RESULTS_PATH = path.resolve("./verify-results.json");
+
+interface VerifyResults {
+  lastRun: string;
+  processed: string[];
+  withDiffs: string[];
+  matching: string[];
+  skipped: string[];
+  errors: { id: string; message: string }[];
+}
+
+function loadPreviousResults(): VerifyResults | null {
+  if (!fs.existsSync(RESULTS_PATH)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(RESULTS_PATH, "utf8")) as VerifyResults;
+  } catch {
+    return null;
+  }
+}
+
 // ── Main ──
 
 async function main(): Promise<void> {
+  const errorsOnly = process.argv.includes("--errors-only");
+
   const connected = await checkLLMConnection();
   if (!connected) {
     console.error(
@@ -187,21 +211,45 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const subdirs = fs
-    .readdirSync(PDF_DIR)
-    .filter((name) => {
-      const full = path.join(PDF_DIR, name);
-      return fs.statSync(full).isDirectory() && /^\d+$/.test(name);
-    })
-    .sort((a, b) => Number(a) - Number(b));
+  let subdirs: string[];
 
-  console.log(`Found ${subdirs.length} thesis folders.\n`);
+  if (errorsOnly) {
+    const prev = loadPreviousResults();
+    if (!prev || prev.errors.length === 0) {
+      console.log("No previous errors found. Nothing to reprocess.");
+      return;
+    }
+    subdirs = prev.errors.map((e) => e.id).sort((a, b) => Number(a) - Number(b));
+    console.log(`--errors-only: reprocessing ${subdirs.length} previously errored folders.\n`);
+  } else {
+    subdirs = fs
+      .readdirSync(PDF_DIR)
+      .filter((name) => {
+        const full = path.join(PDF_DIR, name);
+        return fs.statSync(full).isDirectory() && /^\d+$/.test(name);
+      })
+      .sort((a, b) => Number(a) - Number(b));
+    console.log(`Found ${subdirs.length} thesis folders.\n`);
+  }
 
-  let processed = 0;
-  let withDiffs = 0;
-  let noDiffs = 0;
-  let skipped = 0;
-  let errors = 0;
+  const results: VerifyResults = {
+    lastRun: new Date().toISOString(),
+    processed: [],
+    withDiffs: [],
+    matching: [],
+    skipped: [],
+    errors: [],
+  };
+
+  // When running --errors-only, merge with previous results so we don't lose data
+  const prevResults = errorsOnly ? loadPreviousResults() : null;
+  if (prevResults) {
+    results.processed = [...prevResults.processed];
+    results.withDiffs = [...prevResults.withDiffs];
+    results.matching = [...prevResults.matching];
+    results.skipped = [...prevResults.skipped];
+    // errors will be rebuilt from scratch for the retried folders
+  }
 
   for (const dir of subdirs) {
     const dirPath = path.join(PDF_DIR, dir);
@@ -210,20 +258,20 @@ async function main(): Promise<void> {
 
     if (!fs.existsSync(metaPath)) {
       console.log(`[${dir}] No metadata.json, skipping.`);
-      skipped++;
+      if (!results.skipped.includes(dir)) results.skipped.push(dir);
       continue;
     }
 
     const pdfFiles = fs.readdirSync(dirPath).filter((f) => f.toLowerCase().endsWith(".pdf"));
     if (pdfFiles.length === 0) {
       console.log(`[${dir}] No PDF file, skipping.`);
-      skipped++;
+      if (!results.skipped.includes(dir)) results.skipped.push(dir);
       continue;
     }
 
     if (fs.existsSync(aiMetaPath)) {
       console.log(`[${dir}] AI-metadata.json already exists, skipping.`);
-      skipped++;
+      if (!results.skipped.includes(dir)) results.skipped.push(dir);
       continue;
     }
 
@@ -250,26 +298,31 @@ async function main(): Promise<void> {
         }
 
         fs.writeFileSync(aiMetaPath, JSON.stringify(aiMeta, null, 2), "utf8");
-        withDiffs++;
+        results.withDiffs.push(dir);
 
         const fieldNames = diffs.map((d) => d.field).join(", ");
         console.log(`[${dir}] Differences found in: ${fieldNames} → wrote AI-metadata.json`);
       } else {
-        noDiffs++;
+        results.matching.push(dir);
         console.log(`[${dir}] All metadata matches. No AI-metadata.json needed.`);
       }
 
-      processed++;
+      results.processed.push(dir);
     } catch (err) {
-      console.error(`[${dir}] Error: ${(err as Error).message}`);
-      errors++;
+      const msg = (err as Error).message;
+      console.error(`[${dir}] Error: ${msg}`);
+      results.errors.push({ id: dir, message: msg });
     }
   }
 
+  fs.writeFileSync(RESULTS_PATH, JSON.stringify(results, null, 2), "utf8");
+
   console.log(
-    `\nDone! Processed: ${processed}, skipped: ${skipped}, ` +
-      `with differences: ${withDiffs}, matching: ${noDiffs}, errors: ${errors}`
+    `\nDone! Processed: ${results.processed.length}, skipped: ${results.skipped.length}, ` +
+      `with differences: ${results.withDiffs.length}, matching: ${results.matching.length}, ` +
+      `errors: ${results.errors.length}`
   );
+  console.log(`Results saved to ${RESULTS_PATH}`);
 }
 
 main().catch((err) => {

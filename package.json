@@ -8,7 +8,8 @@
     "organize-theses": "tsx organizeTheses.ts",
     "extract-abstracts": "tsx extractAbstracts.ts",
     "extract-english-titles": "tsx extractEnglishTitles.ts",
-    "verify-metadata": "tsx verify-metadata.ts"
+    "verify-metadata": "tsx verify-metadata.ts",
+    "verify-metadata:errors-only": "tsx verify-metadata.ts --errors-only"
   },
   "keywords": [],
   "author": "",
