@@ -9,7 +9,8 @@
     "extract-abstracts": "tsx extractAbstracts.ts",
     "extract-english-titles": "tsx extractEnglishTitles.ts",
     "verify-metadata": "tsx verify-metadata.ts",
-    "verify-metadata:errors-only": "tsx verify-metadata.ts --errors-only"
+    "verify-metadata:errors-only": "tsx verify-metadata.ts --errors-only",
+    "verify-metadata:force": "tsx verify-metadata.ts --force"
   },
   "keywords": [],
   "author": "",

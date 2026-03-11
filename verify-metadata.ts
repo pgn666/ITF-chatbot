@@ -196,10 +196,16 @@ function loadPreviousResults(): VerifyResults | null {
   }
 }
 
+function saveResults(results: VerifyResults): void {
+  results.lastRun = new Date().toISOString();
+  fs.writeFileSync(RESULTS_PATH, JSON.stringify(results, null, 2), "utf8");
+}
+
 // ── Main ──
 
 async function main(): Promise<void> {
   const errorsOnly = process.argv.includes("--errors-only");
+  const force = process.argv.includes("--force");
 
   const connected = await checkLLMConnection();
   if (!connected) {
@@ -259,6 +265,7 @@ async function main(): Promise<void> {
     if (!fs.existsSync(metaPath)) {
       console.log(`[${dir}] No metadata.json, skipping.`);
       if (!results.skipped.includes(dir)) results.skipped.push(dir);
+      saveResults(results);
       continue;
     }
 
@@ -266,12 +273,14 @@ async function main(): Promise<void> {
     if (pdfFiles.length === 0) {
       console.log(`[${dir}] No PDF file, skipping.`);
       if (!results.skipped.includes(dir)) results.skipped.push(dir);
+      saveResults(results);
       continue;
     }
 
-    if (fs.existsSync(aiMetaPath)) {
-      console.log(`[${dir}] AI-metadata.json already exists, skipping.`);
+    if (fs.existsSync(aiMetaPath) && !force) {
+      console.log(`[${dir}] AI-metadata.json already exists, skipping. (use --force to re-verify)`);
       if (!results.skipped.includes(dir)) results.skipped.push(dir);
+      saveResults(results);
       continue;
     }
 
@@ -303,8 +312,21 @@ async function main(): Promise<void> {
         const fieldNames = diffs.map((d) => d.field).join(", ");
         console.log(`[${dir}] Differences found in: ${fieldNames} → wrote AI-metadata.json`);
       } else {
+        const aiMeta: Record<string, unknown> = {
+          _source: "LLM verification",
+          _verifiedAt: new Date().toISOString(),
+          _differencesFound: 0,
+          title: null,
+          autor: null,
+          abstract: null,
+          keywords: null,
+          englishTitle: null,
+          type: null,
+          rok: null,
+        };
+        fs.writeFileSync(aiMetaPath, JSON.stringify(aiMeta, null, 2), "utf8");
         results.matching.push(dir);
-        console.log(`[${dir}] All metadata matches. No AI-metadata.json needed.`);
+        console.log(`[${dir}] All metadata matches → wrote AI-metadata.json with null values`);
       }
 
       results.processed.push(dir);
@@ -313,9 +335,9 @@ async function main(): Promise<void> {
       console.error(`[${dir}] Error: ${msg}`);
       results.errors.push({ id: dir, message: msg });
     }
-  }
 
-  fs.writeFileSync(RESULTS_PATH, JSON.stringify(results, null, 2), "utf8");
+    saveResults(results);
+  }
 
   console.log(
     `\nDone! Processed: ${results.processed.length}, skipped: ${results.skipped.length}, ` +
