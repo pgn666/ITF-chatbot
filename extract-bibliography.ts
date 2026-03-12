@@ -4,7 +4,7 @@ import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 
 const PDF_DIR = path.resolve("./PDFs");
 const LLM_BASE_URL = process.env.LLM_URL || "http://localhost:1234/v1";
-const LAST_PAGES = 15;
+const LAST_PAGES = 30;
 const MAX_TEXT_CHARS = 15_000;
 
 interface BibliographyEntry {
@@ -150,7 +150,8 @@ Your task:
 
 Important rules:
 - Only extract entries from the bibliography/references section, NOT from footnotes, index of names, appendices, or body text.
-- If the bibliography has subsections (e.g. "Knižní publikace", "Články z periodik", "Katalogy k výstavám", "Online zdroje"), include entries from ALL subsections.
+- If the bibliography has subsections (e.g. "Knižní publikace", "Knihy", "Články z periodik", "Katalogy k výstavám", "Online zdroje", "Internet", "Bakalářské, diplomové a dizertační práce", "Časopisy", "Rozhovory"), include entries from ALL subsections.
+- For thesis/dissertation entries (e.g. "FOLPRECHT, Vladimír. Etika... Praha, 2014. Diplomová práce. Univerzita Karlova"), use the university as "publisher" and the city of the university as "city".
 - Skip pure URLs that are not part of a bibliographic entry.
 - For journal articles, "publisher" should be the journal/periodical name.
 - If no bibliography section is found at all, return an empty array.
@@ -363,7 +364,7 @@ async function main(): Promise<void> {
           errMsg.includes("tokens to keep") ||
           errMsg.includes("context length")
         ) {
-          const RETRY_PAGES = 5;
+          const RETRY_PAGES = 15;
           console.log(
             `[${dir}] Context too long, retrying with last ${RETRY_PAGES} pages…`,
           );
