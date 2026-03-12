@@ -1,5 +1,5 @@
 {
-  "lastRun": "2026-03-12T09:02:03.178Z",
+  "lastRun": "2026-03-12T10:13:36.562Z",
   "processed": [
     "504",
     "590",
@@ -24,7 +24,35 @@
     "554",
     "583",
     "606",
-    "621"
+    "621",
+    "401",
+    "1905",
+    "2096",
+    "2117",
+    "2123",
+    "2344",
+    "2447",
+    "2456",
+    "2467",
+    "2469",
+    "2567",
+    "2587",
+    "2588",
+    "2598",
+    "2607",
+    "2632",
+    "2653",
+    "2755",
+    "2775",
+    "2785",
+    "2788",
+    "2804",
+    "3005",
+    "3014",
+    "3122",
+    "3133",
+    "3149",
+    "3157"
   ],
   "withEntries": [
     "590",
@@ -36,7 +64,16 @@
     "537",
     "554",
     "583",
-    "621"
+    "621",
+    "1905",
+    "2344",
+    "2587",
+    "2598",
+    "2632",
+    "2653",
+    "2775",
+    "3014",
+    "3157"
   ],
   "empty": [
     "504",
@@ -52,7 +89,26 @@
     "533",
     "535",
     "544",
-    "606"
+    "606",
+    "401",
+    "2096",
+    "2117",
+    "2123",
+    "2447",
+    "2456",
+    "2467",
+    "2469",
+    "2567",
+    "2588",
+    "2607",
+    "2755",
+    "2785",
+    "2788",
+    "2804",
+    "3005",
+    "3122",
+    "3133",
+    "3149"
   ],
   "skipped": [
     "1",
@@ -775,7 +831,19 @@
     "451",
     "469",
     "482",
-    "483"
+    "483",
+    "401",
+    "484",
+    "497",
+    "507",
+    "533",
+    "535",
+    "537",
+    "544",
+    "554",
+    "583",
+    "606",
+    "621"
   ],
   "errors": [
     {
@@ -1216,6 +1284,222 @@
     },
     {
       "id": "639",
+      "message": "Invalid PDF structure."
+    },
+    {
+      "id": "349",
+      "message": "Failed to parse LLM JSON: <|channel|>final <|constrain|>JSON<|message|>[]"
+    },
+    {
+      "id": "349",
+      "message": "Failed to parse LLM JSON: <|channel|>final <|constrain|>JSON<|message|>[]"
+    },
+    {
+      "id": "349",
+      "message": "Failed to parse LLM JSON: <|channel|>final <|constrain|>JSON<|message|>[]"
+    },
+    {
+      "id": "349",
+      "message": "Failed to parse LLM JSON: <|channel|>final <|constrain|>JSON<|message|>[]"
+    },
+    {
+      "id": "357",
+      "message": "Invalid PDF structure."
+    },
+    {
+      "id": "357",
+      "message": "Invalid PDF structure."
+    },
+    {
+      "id": "357",
+      "message": "Invalid PDF structure."
+    },
+    {
+      "id": "357",
+      "message": "Invalid PDF structure."
+    },
+    {
+      "id": "401",
+      "message": "Failed to parse LLM JSON: <|channel|>final <|constrain|>JSON<|message|>[]"
+    },
+    {
+      "id": "401",
+      "message": "Failed to parse LLM JSON: <|channel|>final <|constrain|>json<|message|>[]"
+    },
+    {
+      "id": "421",
+      "message": "Invalid Root reference."
+    },
+    {
+      "id": "421",
+      "message": "Invalid Root reference."
+    },
+    {
+      "id": "421",
+      "message": "Invalid Root reference."
+    },
+    {
+      "id": "421",
+      "message": "Invalid Root reference."
+    },
+    {
+      "id": "426",
+      "message": "Invalid Root reference."
+    },
+    {
+      "id": "426",
+      "message": "Invalid Root reference."
+    },
+    {
+      "id": "426",
+      "message": "Invalid Root reference."
+    },
+    {
+      "id": "426",
+      "message": "Invalid Root reference."
+    },
+    {
+      "id": "429",
+      "message": "Failed to parse LLM JSON: <|channel|>final <|constrain|>JSON<|message|>[]"
+    },
+    {
+      "id": "429",
+      "message": "Failed to parse LLM JSON: <|channel|>final <|constrain|>JSON<|message|>[]"
+    },
+    {
+      "id": "429",
+      "message": "Failed to parse LLM JSON: <|channel|>final <|constrain|>JSON<|message|>[]"
+    },
+    {
+      "id": "429",
+      "message": "Failed to parse LLM JSON: <|channel|>final <|constrain|>JSON<|message|>[]"
+    },
+    {
+      "id": "443",
+      "message": "Invalid PDF structure."
+    },
+    {
+      "id": "443",
+      "message": "Invalid PDF structure."
+    },
+    {
+      "id": "443",
+      "message": "Invalid PDF structure."
+    },
+    {
+      "id": "443",
+      "message": "Invalid PDF structure."
+    },
+    {
+      "id": "446",
+      "message": "Invalid PDF structure."
+    },
+    {
+      "id": "446",
+      "message": "Invalid PDF structure."
+    },
+    {
+      "id": "446",
+      "message": "Invalid PDF structure."
+    },
+    {
+      "id": "446",
+      "message": "Invalid PDF structure."
+    },
+    {
+      "id": "520",
+      "message": "Invalid PDF structure."
+    },
+    {
+      "id": "520",
+      "message": "Invalid PDF structure."
+    },
+    {
+      "id": "532",
+      "message": "Invalid PDF structure."
+    },
+    {
+      "id": "532",
+      "message": "Invalid PDF structure."
+    },
+    {
+      "id": "573",
+      "message": "Failed to parse LLM JSON: <|channel|>final <|constrain|>JSON<|message|>[]"
+    },
+    {
+      "id": "573",
+      "message": "Failed to parse LLM JSON: <|channel|>final <|constrain|>JSON<|message|>[]"
+    },
+    {
+      "id": "607",
+      "message": "Invalid PDF structure."
+    },
+    {
+      "id": "607",
+      "message": "Invalid PDF structure."
+    },
+    {
+      "id": "639",
+      "message": "Invalid PDF structure."
+    },
+    {
+      "id": "639",
+      "message": "Invalid PDF structure."
+    },
+    {
+      "id": "2105",
+      "message": "Invalid Root reference."
+    },
+    {
+      "id": "2116",
+      "message": "Invalid PDF structure."
+    },
+    {
+      "id": "2450",
+      "message": "Failed to parse LLM JSON: <|channel|>final <|constrain|>JSON<|message|>[]"
+    },
+    {
+      "id": "2466",
+      "message": "Invalid PDF structure."
+    },
+    {
+      "id": "2477",
+      "message": "Invalid PDF structure."
+    },
+    {
+      "id": "2606",
+      "message": "Failed to parse LLM JSON: <|channel|>final <|constrain|>JSON<|message|>[]"
+    },
+    {
+      "id": "2608",
+      "message": "Invalid PDF structure."
+    },
+    {
+      "id": "2638",
+      "message": "Invalid PDF structure."
+    },
+    {
+      "id": "2654",
+      "message": "Failed to parse LLM JSON: <|channel|>final <|constrain|>JSON<|message|>[]"
+    },
+    {
+      "id": "2945",
+      "message": "Invalid PDF structure."
+    },
+    {
+      "id": "2972",
+      "message": "Invalid Root reference."
+    },
+    {
+      "id": "3017",
+      "message": "Invalid PDF structure."
+    },
+    {
+      "id": "3115",
+      "message": "Failed to parse LLM JSON: <|channel|>final <|constrain|>JSON<|message|>[]"
+    },
+    {
+      "id": "3181",
       "message": "Invalid PDF structure."
     }
   ]
