@@ -4,8 +4,8 @@ import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 
 const PDF_DIR = path.resolve("./PDFs");
 const LLM_BASE_URL = process.env.LLM_URL || "http://localhost:1234/v1";
-const LAST_PAGES = 10;
-const MAX_TEXT_CHARS = 10_000;
+const LAST_PAGES = 30;
+const MAX_TEXT_CHARS = 15_000;
 
 interface BibliographyEntry {
   author: string | null;
@@ -67,18 +67,53 @@ async function extractTailTextFromPdf(
 
   const startPage = Math.max(1, doc.numPages - lastPages + 1);
   const chunks: string[] = [];
-  let totalLen = 0;
 
   for (let p = startPage; p <= doc.numPages; p++) {
     const page = await doc.getPage(p);
     const content = await page.getTextContent();
     const text = extractPageLines(content.items as TextItem[]);
     chunks.push(text);
-    totalLen += text.length;
-    if (totalLen >= MAX_TEXT_CHARS) break;
   }
 
-  return chunks.join("\n\n").substring(0, MAX_TEXT_CHARS);
+  const full = chunks.join("\n\n");
+  if (full.length <= MAX_TEXT_CHARS) return full;
+  return full.substring(full.length - MAX_TEXT_CHARS);
+}
+
+// ── Local bibliography section detection ──
+
+const BIB_SECTION_PATTERN = new RegExp(
+  "^\\s*(?:\\d+\\.?\\s+)?" +
+    "(?:bibliografie|použitá\\s+literatura|seznam\\s+(?:použité\\s+)?literatury|" +
+    "literatura|zdroje|použité\\s+zdroje|prameny\\s+a\\s+literatura|prameny|" +
+    "references|bibliography)" +
+    "\\s*$",
+  "im",
+);
+
+const END_SECTION_PATTERN = new RegExp(
+  "^\\s*(?:\\d+\\.?\\s+)?" +
+    "(?:jmenný\\s+rejstřík|rejstřík|přílohy|příloha|seznam\\s+(?:obrázků|příloh|zkratek|tabulek)|" +
+    "životopis|curriculum\\s+vitae|poděkování|abstract|anotace)" +
+    "\\s*$",
+  "im",
+);
+
+function extractBibliographySection(text: string): string | null {
+  const match = BIB_SECTION_PATTERN.exec(text);
+  if (!match) return null;
+
+  const bibStart = match.index;
+  const afterBib = text.substring(bibStart);
+
+  const endMatch = END_SECTION_PATTERN.exec(
+    afterBib.substring(match[0].length),
+  );
+  if (endMatch) {
+    return afterBib.substring(0, match[0].length + endMatch.index).trim();
+  }
+
+  return afterBib.trim();
 }
 
 // ── LM Studio API ──
@@ -103,7 +138,7 @@ async function queryLLMForBibliography(
   const systemPrompt = `You are a bibliography extraction assistant. You will receive text from the end pages of a Czech/Slovak/Polish university thesis PDF.
 
 Your task:
-1. Locate the bibliography/references section. It may be titled "BIBLIOGRAFIE", "Použitá literatura", "Seznam literatury", "SEZNAM LITERATURY", "Seznam použité literatury", "SEZNAM POUŽITÉ LITERATURY", "Literatura", "Zdroje", "Použité zdroje", "POUŽITÉ ZDROJE", "Prameny a literatura", "References", "Bibliography", or similar. NOTE: titles may have unusual capitalization (e.g. "seZnaM použité literatury") or be split across multiple lines — match them case-insensitively.
+1. Locate the bibliography/references section. It may be titled "BIBLIOGRAFIE", "Použitá literatura", "Seznam literatury", "SEZNAM LITERATURY", "Seznam použité literatury", "SEZNAM POUŽITÉ LITERATURY", "Literatura", "Zdroje", "Použité zdroje", "POUŽITÉ ZDROJE", "Prameny a literatura", "Prameny", "References", "Bibliography", or similar. Section titles may be preceded by a chapter number (e.g. "9 Literatura"). NOTE: titles may have unusual capitalization (e.g. "seZnaM použité literatury") or be split across multiple lines — match them case-insensitively.
 2. Extract EVERY bibliographic entry from that section into a structured JSON array.
 3. For each entry, extract these fields (set to null if not determinable):
    - "author": Author name(s), e.g. "Barthes, R." or "Birgus, V., Vojtěchovský, M."
@@ -115,7 +150,8 @@ Your task:
 
 Important rules:
 - Only extract entries from the bibliography/references section, NOT from footnotes, index of names, appendices, or body text.
-- If the bibliography has subsections (e.g. "Knižní publikace", "Články z periodik", "Katalogy k výstavám", "Online zdroje"), include entries from ALL subsections.
+- If the bibliography has subsections (e.g. "Knižní publikace", "Knihy", "Články z periodik", "Katalogy k výstavám", "Online zdroje", "Internet", "Bakalářské, diplomové a dizertační práce", "Časopisy", "Rozhovory"), include entries from ALL subsections.
+- For thesis/dissertation entries (e.g. "FOLPRECHT, Vladimír. Etika... Praha, 2014. Diplomová práce. Univerzita Karlova"), use the university as "publisher" and the city of the university as "city".
 - Skip pure URLs that are not part of a bibliographic entry.
 - For journal articles, "publisher" should be the journal/periodical name.
 - If no bibliography section is found at all, return an empty array.
@@ -307,25 +343,36 @@ async function main(): Promise<void> {
         continue;
       }
 
-      console.log(
-        `[${dir}] Querying LLM for bibliography (${pdfText.length} chars)…`,
-      );
+      const bibSection = extractBibliographySection(pdfText);
+      const textForLLM = bibSection ?? pdfText;
+      if (bibSection) {
+        console.log(
+          `[${dir}] Found bibliography section locally (${bibSection.length} chars), querying LLM…`,
+        );
+      } else {
+        console.log(
+          `[${dir}] No section header found locally, sending full text to LLM (${pdfText.length} chars)…`,
+        );
+      }
+
       let entries: BibliographyEntry[];
       try {
-        entries = await queryLLMForBibliography(pdfText);
+        entries = await queryLLMForBibliography(textForLLM);
       } catch (firstErr) {
         const errMsg = (firstErr as Error).message;
         if (
           errMsg.includes("tokens to keep") ||
           errMsg.includes("context length")
         ) {
-          const RETRY_PAGES = 5;
+          const RETRY_PAGES = 15;
           console.log(
             `[${dir}] Context too long, retrying with last ${RETRY_PAGES} pages…`,
           );
           pdfText = await extractTailTextFromPdf(pdfPath, RETRY_PAGES);
-          console.log(`[${dir}] Retrying LLM query (${pdfText.length} chars)…`);
-          entries = await queryLLMForBibliography(pdfText);
+          const retrySection = extractBibliographySection(pdfText);
+          const retryText = retrySection ?? pdfText;
+          console.log(`[${dir}] Retrying LLM query (${retryText.length} chars)…`);
+          entries = await queryLLMForBibliography(retryText);
         } else {
           throw firstErr;
         }

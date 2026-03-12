@@ -14,6 +14,24 @@ const CONCURRENCY = 3;
 // Delay between requests in ms (to be polite to the server)
 const REQUEST_DELAY_MS = 300;
 
+type ThesisMode = "bachelor" | "master" | "all";
+
+const MODE_HEADING_PATTERNS: Record<Exclude<ThesisMode, "all">, string> = {
+  bachelor: "bakalářsk",
+  master: "magistersk",
+};
+
+function parseMode(arg: string | undefined): ThesisMode {
+  const valid: ThesisMode[] = ["bachelor", "master", "all"];
+  const aliases: Record<string, ThesisMode> = { bc: "bachelor", mgr: "master" };
+  const resolved = aliases[arg ?? ""] ?? arg ?? "all";
+  if (!valid.includes(resolved as ThesisMode)) {
+    console.error(`Unknown mode "${arg}". Valid modes: ${valid.join(", ")} (aliases: bc, mgr)`);
+    process.exit(1);
+  }
+  return resolved as ThesisMode;
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -153,7 +171,38 @@ async function runWithConcurrency<T>(
   await Promise.all(workers);
 }
 
+function collectWorkDetailPaths(
+  $: cheerio.Root,
+  mode: ThesisMode
+): { label: string; paths: string[] } {
+  const patterns =
+    mode === "all"
+      ? Object.values(MODE_HEADING_PATTERNS)
+      : [MODE_HEADING_PATTERNS[mode]];
+
+  const paths: string[] = [];
+  const matchedSections: string[] = [];
+
+  $("h2").each((_, heading) => {
+    const text = $(heading).text().trim();
+    if (!patterns.some((p) => text.includes(p))) return;
+
+    matchedSections.push(text);
+    const table = $(heading).next("table");
+    table.find("a[href*='workdetail']").each((_, el) => {
+      const href = $(el).attr("href");
+      if (href) paths.push(href);
+    });
+  });
+
+  const label = matchedSections.length > 0 ? matchedSections.join(" + ") : mode;
+  return { label, paths };
+}
+
 async function main(): Promise<void> {
+  const mode = parseMode(process.argv[2]);
+  console.log(`Mode: ${mode}\n`);
+
   fs.mkdirSync(PDF_DIR, { recursive: true });
 
   const processed = loadProgress();
@@ -165,21 +214,7 @@ async function main(): Promise<void> {
   const html = await fetchPage(MAIN_URL);
   const $ = cheerio.load(html);
 
-  // Find the "Teoretické bakalářské práce" section and collect its table's workdetail links
-  const workDetailPaths: string[] = [];
-
-  // Walk through h2 headings to find the bachelor theses section
-  $("h2").each((_, heading) => {
-    const text = $(heading).text().trim();
-    if (!text.includes("bakalářské")) return;
-
-    // The table immediately follows this h2
-    const table = $(heading).next("table");
-    table.find("a[href*='workdetail']").each((_, el) => {
-      const href = $(el).attr("href");
-      if (href) workDetailPaths.push(href);
-    });
-  });
+  const { label, paths: workDetailPaths } = collectWorkDetailPaths($, mode);
 
   if (workDetailPaths.length === 0) {
     console.error("No work detail links found. The page structure may have changed.");
@@ -188,7 +223,7 @@ async function main(): Promise<void> {
 
   const remaining = workDetailPaths.filter((p) => !processed.has(p));
   console.log(
-    `Found ${workDetailPaths.length} bachelor thesis entries, ${remaining.length} remaining. Starting downloads...\n`
+    `Found ${workDetailPaths.length} entries for [${label}], ${remaining.length} remaining. Starting downloads...\n`
   );
 
   const tasks = workDetailPaths.map(
